@@ -1,0 +1,24 @@
+# Needed for HPA and `kubectl top`. DOKS doesn't appear to install it by default.
+# If `kubectl get deploy -n kube-system metrics-server` already shows one, delete this file
+# and its line in kustomization.yaml.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: metrics-server
+  namespace: kube-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: metrics-server
+      # TODO: pin to the installed version after the first successful install.
+      version: ">=3.12.0"
+      sourceRef:
+        kind: HelmRepository
+        name: metrics-server
+        namespace: flux-system
+  values:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 48Mi

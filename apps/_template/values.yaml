@@ -1,0 +1,33 @@
+# Everything about this project in one place. See charts/web-app/values.yaml for all options.
+image:
+  repository: __IMAGE__ # {"$imagepolicy": "flux-system:__PROJECT__:name"}
+  tag: replace-me # {"$imagepolicy": "flux-system:__PROJECT__:tag"}
+
+port: __PORT__
+healthPath: /
+
+hosts:
+  - __HOST__
+
+env: {}
+# envFromSecret: __PROJECT__-env
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+hpa:
+  enabled: true
+  min: 1
+  max: 3
+  cpu: 80 # target average CPU %, relative to requests.cpu
+
+# Block storage volumes (DigitalOcean, ReadWriteOnce = one node at a time).
+# Adding a volume switches the deployment to one replica with Recreate updates.
+volumes: []
+#  - name: data
+#    size: 1Gi
+#    mountPath: /data

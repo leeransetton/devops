@@ -1,0 +1,7 @@
+# Copy to backend.hcl (git-ignored) and fill in.
+# Create the bucket once by hand in the DigitalOcean console (Spaces, region fra1),
+# and a Spaces access key under API -> Spaces Keys.
+bucket     = "CHANGE-ME-tfstate"
+endpoints  = { s3 = "https://fra1.digitaloceanspaces.com" }
+access_key = "CHANGE-ME"
+secret_key = "CHANGE-ME"

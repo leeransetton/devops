@@ -1,0 +1,29 @@
+# Flux watches GHCR for new tags and writes the newest one into values.yaml.
+# Tags must look like: main-<short sha>-<unix timestamp>  (see docs/app-repo-release.yml)
+# These live in flux-system because ImageUpdateAutomation only reads policies there.
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: __PROJECT__
+  namespace: flux-system
+spec:
+  image: __IMAGE__
+  interval: 5m
+  # Private image? Uncomment and create the secret in flux-system (see README).
+  # secretRef:
+  #   name: ghcr-pull
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: __PROJECT__
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: __PROJECT__
+  filterTags:
+    pattern: '^main-[a-f0-9]+-(?P<ts>[0-9]+)$'
+    extract: '$ts'
+  policy:
+    numerical:
+      order: asc

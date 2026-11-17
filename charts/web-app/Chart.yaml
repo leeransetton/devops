@@ -1,0 +1,5 @@
+apiVersion: v2
+name: web-app
+description: Generic chart shared by every project in apps/
+type: application
+version: 0.1.0

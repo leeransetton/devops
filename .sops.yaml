@@ -1,0 +1,5 @@
+# Replace with your age public key (the "public key: age1..." line from age-keygen).
+creation_rules:
+  - path_regex: .*\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1CHANGE-ME

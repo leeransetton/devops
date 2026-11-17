@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - release.yaml
+  - image.yaml
+  # - secrets.sops.yaml   # app env vars, see README "Secrets"
+  # - ghcr-pull.sops.yaml # only if the GHCR image is private
+
+# values.yaml becomes a ConfigMap the HelmRelease reads.
+# The watch label makes Flux redeploy as soon as values change.
+configMapGenerator:
+  - name: __PROJECT__-values
+    namespace: __PROJECT__
+    files:
+      - values.yaml
+    options:
+      labels:
+        reconcile.fluxcd.io/watch: Enabled
+generatorOptions:
+  disableNameSuffixHash: true

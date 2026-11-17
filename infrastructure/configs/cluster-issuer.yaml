@@ -1,0 +1,15 @@
+# Free TLS certificates from Let's Encrypt, validated over HTTP through Traefik.
+# Ingresses opt in with the annotation: cert-manager.io/cluster-issuer: letsencrypt
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik

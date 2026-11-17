@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+do_token           = "dop_v1_..."
+external_dns_token = "dop_v1_..." # custom scope: domain read/write only
+github_token       = "github_pat_..."
+github_owner       = "CHANGE-ME"
+github_repo        = "devops"
+
+# Paste the whole file produced by: age-keygen -o age.agekey
+sops_age_key = <<-EOT
+# created: ...
+# public key: age1...
+AGE-SECRET-KEY-...
+EOT
+
+# Defaults, change if needed:
+# region    = "fra1"
+# node_size = "s-2vcpu-4gb"
+# min_nodes = 1
+# max_nodes = 3

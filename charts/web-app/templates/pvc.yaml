@@ -1,0 +1,19 @@
+{{- range .Values.volumes }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $.Release.Name }}-{{ .name }}
+  labels:
+    {{- include "web-app.labels" $ | nindent 4 }}
+  annotations:
+    # Keep the volume (and its data) if the release is ever uninstalled.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .storageClass | default "do-block-storage" }}
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}

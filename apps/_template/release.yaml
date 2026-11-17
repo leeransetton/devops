@@ -1,0 +1,19 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: __PROJECT__
+  namespace: __PROJECT__
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ./charts/web-app
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  valuesFrom:
+    - kind: ConfigMap
+      name: __PROJECT__-values
+      valuesKey: values.yaml

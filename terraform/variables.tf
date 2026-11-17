@@ -59,10 +59,14 @@ variable "domains" {
   ]
 }
 
-variable "sops_age_key" {
-  description = "Contents of the age private key file Flux uses to decrypt *.sops.yaml secrets."
+variable "flux_ssh_key_file" {
+  description = "Path to the private SSH key Flux uses for the repo (public key at the same path + .pub). Create with: ssh-keygen -t ed25519 -N \"\" -f <path>"
   type        = string
-  sensitive   = true
+}
+
+variable "sops_age_key_file" {
+  description = "Path to the age private key file Flux uses to decrypt *.sops.yaml secrets."
+  type        = string
 }
 
 variable "external_dns_token" {

@@ -1,5 +1,5 @@
-# Replace with your age public key (the "public key: age1..." line from age-keygen).
+# Public half of the age key. Private key: %APPDATA%/sops/age/keys.txt on the owner machine (back it up!)
 creation_rules:
   - path_regex: .*\.sops\.yaml$
     encrypted_regex: ^(data|stringData)$
-    age: age1CHANGE-ME
+    age: age1k9urqvykftmpya77yfgq574cca042zsjv0welcmdagy2f63advnsk06kxk

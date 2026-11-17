@@ -1,43 +1,29 @@
-locals {
-  kube = {
-    host                   = digitalocean_kubernetes_cluster.main.endpoint
-    token                  = digitalocean_kubernetes_cluster.main.kube_config[0].token
-    cluster_ca_certificate = base64decode(digitalocean_kubernetes_cluster.main.kube_config[0].cluster_ca_certificate)
-  }
-}
-
-provider "kubernetes" {
-  host                   = local.kube.host
-  token                  = local.kube.token
-  cluster_ca_certificate = local.kube.cluster_ca_certificate
-}
-
 provider "github" {
   owner = var.github_owner
   token = var.github_token
 }
 
 # Flux pushes to the repo (image tag bumps), so its deploy key needs write access.
-resource "tls_private_key" "flux" {
-  algorithm   = "ECDSA"
-  ecdsa_curve = "P256"
-}
-
+# The key pair is created once with ssh-keygen (see README) and stays outside git.
 resource "github_repository_deploy_key" "flux" {
   title      = "flux-${var.name}"
   repository = var.github_repo
-  key        = tls_private_key.flux.public_key_openssh
+  key        = trimspace(file("${var.flux_ssh_key_file}.pub"))
   read_only  = false
 }
 
 provider "flux" {
-  kubernetes = local.kube
+  kubernetes = {
+    host                   = digitalocean_kubernetes_cluster.main.endpoint
+    token                  = digitalocean_kubernetes_cluster.main.kube_config[0].token
+    cluster_ca_certificate = base64decode(digitalocean_kubernetes_cluster.main.kube_config[0].cluster_ca_certificate)
+  }
   git = {
     url    = "ssh://git@github.com/${var.github_owner}/${var.github_repo}.git"
     branch = "main"
     ssh = {
       username    = "git"
-      private_key = tls_private_key.flux.private_key_pem
+      private_key = file(var.flux_ssh_key_file)
     }
   }
 }
@@ -50,32 +36,42 @@ resource "flux_bootstrap_git" "this" {
   components_extra   = ["image-reflector-controller", "image-automation-controller"]
 }
 
-# Key Flux uses to decrypt *.sops.yaml files.
-resource "kubernetes_secret" "sops_age" {
+# Two secrets the cluster needs that must never be in git:
+#   flux-system/sops-age                      - key Flux uses to decrypt *.sops.yaml
+#   external-dns/external-dns-digitalocean    - DO token for DNS records
+# Created with kubectl instead of the kubernetes provider, because Windows Smart App
+# Control blocks that provider's binary on the owner's machine. Re-runs when any input changes.
+resource "terraform_data" "cluster_secrets" {
   depends_on = [flux_bootstrap_git.this]
 
-  metadata {
-    name      = "sops-age"
-    namespace = "flux-system"
+  triggers_replace = {
+    cluster   = digitalocean_kubernetes_cluster.main.id
+    age_key   = sha256(file(var.sops_age_key_file))
+    dns_token = sha256(var.external_dns_token)
   }
-  data = {
-    "age.agekey" = var.sops_age_key
-  }
-}
 
-# external-dns namespace and token are owned here so no secret has to be committed.
-resource "kubernetes_namespace" "external_dns" {
-  metadata {
-    name = "external-dns"
-  }
-}
-
-resource "kubernetes_secret" "external_dns" {
-  metadata {
-    name      = "external-dns-digitalocean"
-    namespace = kubernetes_namespace.external_dns.metadata[0].name
-  }
-  data = {
-    token = var.external_dns_token
+  provisioner "local-exec" {
+    interpreter = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
+    environment = {
+      KUBECONFIG_RAW     = digitalocean_kubernetes_cluster.main.kube_config[0].raw_config
+      AGE_KEY_FILE       = var.sops_age_key_file
+      EXTERNAL_DNS_TOKEN = var.external_dns_token
+    }
+    command = <<-EOT
+      $ErrorActionPreference = 'Stop'
+      $kc = New-TemporaryFile
+      try {
+        [IO.File]::WriteAllText($kc, $env:KUBECONFIG_RAW)
+        function Apply-Yaml([string[]]$yaml) {
+          $yaml | kubectl --kubeconfig $kc apply -f -
+          if ($LASTEXITCODE -ne 0) { throw 'kubectl apply failed' }
+        }
+        Apply-Yaml (kubectl create namespace external-dns --dry-run=client -o yaml)
+        Apply-Yaml (kubectl -n flux-system create secret generic sops-age "--from-file=age.agekey=$env:AGE_KEY_FILE" --dry-run=client -o yaml)
+        Apply-Yaml (kubectl -n external-dns create secret generic external-dns-digitalocean "--from-literal=token=$env:EXTERNAL_DNS_TOKEN" --dry-run=client -o yaml)
+      } finally {
+        Remove-Item $kc -Force -ErrorAction SilentlyContinue
+      }
+    EOT
   }
 }

@@ -39,7 +39,8 @@ Tools: `tofu`, `doctl`, `kubectl`, `flux`, `sops`, `age`.
    - DO API token with full access → `do_token`.
    - DO custom-scoped token with **domain** read/write only → `external_dns_token`.
    - GitHub fine-grained PAT for the `devops` repo with **Administration** and **Contents** read/write → `github_token`.
-4. **SOPS key.** `age-keygen -o age.agekey`. Put the public key (`age1...`) in `.sops.yaml`. Keep `age.agekey` somewhere safe outside git (password manager); paste its contents into `sops_age_key`.
+4. **SOPS key.** `age-keygen -o %APPDATA%\sops\age\keys.txt` (sops finds it there automatically). Put the public key (`age1...`) in `.sops.yaml`, set `sops_age_key_file` to the file's path, and back the file up in a password manager.
+   **Flux deploy key.** `ssh-keygen -t ed25519 -N "" -f %USERPROFILE%\.ssh\flux-devops`, and set `flux_ssh_key_file` to that path.
 5. **Variables.** Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and fill it in.
 6. **Domains already in DigitalOcean?** Import them instead of creating them:
    ```sh

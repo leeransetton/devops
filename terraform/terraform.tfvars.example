@@ -2,15 +2,14 @@
 do_token           = "dop_v1_..."
 external_dns_token = "dop_v1_..." # custom scope: domain read/write only
 github_token       = "github_pat_..."
-github_owner       = "CHANGE-ME"
+github_owner       = "leeransetton"
 github_repo        = "devops"
 
-# Paste the whole file produced by: age-keygen -o age.agekey
-sops_age_key = <<-EOT
-# created: ...
-# public key: age1...
-AGE-SECRET-KEY-...
-EOT
+# age private key (created with age-keygen). Never commit it.
+sops_age_key_file = "C:/Users/<you>/AppData/Roaming/sops/age/keys.txt"
+
+# SSH deploy key for Flux: ssh-keygen -t ed25519 -N "" -f C:/Users/<you>/.ssh/flux-devops
+flux_ssh_key_file = "C:/Users/<you>/.ssh/flux-devops"
 
 # Defaults, change if needed:
 # region    = "fra1"

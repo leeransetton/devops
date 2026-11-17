@@ -95,6 +95,13 @@ helm template x charts/web-app -f apps/<name>/values.yaml >/dev/null
 
 CI (`.github/workflows/validate.yml`) runs the same checks on every push.
 
+## Windows quirks on the owner's machine
+
+- **Smart App Control blocks unsigned provider binaries with no download reputation.** `hashicorp/kubernetes` and `hashicorp/tls` are blocked ("An Application Control policy has blocked this file"). `digitalocean`, `fluxcd/flux` and `integrations/github` work. Don't add new OpenTofu providers without testing that their binary runs. Use `terraform_data` + `local-exec` with `kubectl` (see `terraform/flux.tf`) for in-cluster bits instead.
+- **Norton 360 intercepts TLS**, which breaks OpenTofu's local plugin handshake (`x509: certificate signed by unknown authority`). Always run `tofu` with `TF_DISABLE_PLUGIN_TLS=1` (traffic is localhost only) and outside the Claude Code sandbox.
+- `clusters/prod` has no `kustomization.yaml` on purpose (Flux generates one), so `kubectl kustomize clusters/prod` fails locally. That's expected.
+- **winget:** pass `--source winget`; the msstore source fails on this machine.
+
 ## Access
 
 Credentials live only on the owner's machine: `terraform/terraform.tfvars`, `terraform/backend.hcl`, the kubeconfig from `doctl kubernetes cluster kubeconfig save side-projects`, and the age key (`SOPS_AGE_KEY_FILE`). If one is missing, stop and ask the owner. Don't try to work around it.

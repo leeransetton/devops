@@ -14,14 +14,6 @@ terraform {
       source  = "integrations/github"
       version = "~> 6.0"
     }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = ">= 2.30"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
   }
 
   # State lives in a DigitalOcean Spaces bucket (S3-compatible).

@@ -11,3 +11,7 @@ crash.log
 *.agekey
 .env
 kubeconfig*
+
+# Saved plans contain secrets
+tfplan
+*.tfplan

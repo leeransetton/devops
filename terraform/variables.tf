@@ -53,7 +53,6 @@ variable "domains" {
   type        = list(string)
   default = [
     "leeransetton.com",
-    "elizabethsetton.com",
     "sqloutputtojson.com",
     "gamadanak.com",
   ]

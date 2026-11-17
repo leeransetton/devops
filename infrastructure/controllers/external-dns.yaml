@@ -28,7 +28,6 @@ spec:
       - ingress
     domainFilters:
       - leeransetton.com
-      - elizabethsetton.com
       - sqloutputtojson.com
       - gamadanak.com
     # sync = also delete records when an Ingress is removed.

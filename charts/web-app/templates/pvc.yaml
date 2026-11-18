@@ -12,7 +12,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: {{ .storageClass | default "do-block-storage" }}
+  # Retain: deleting the PVC keeps the DigitalOcean volume (and its data).
+  storageClassName: {{ .storageClass | default "do-block-storage-retain" }}
   resources:
     requests:
       storage: {{ .size }}

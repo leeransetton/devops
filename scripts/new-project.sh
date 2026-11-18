@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/new-project.sh <name> <host> <image> [port]
-# Example: ./scripts/new-project.sh gamadanak gamadanak.com ghcr.io/me/gamadanak 3000
+# Usage: ./scripts/new-project.sh <name> <host> <owner/repo> [port]
+# Example: ./scripts/new-project.sh gamadanak gamadanak.com leeransetton/gamadanak 3000
+#
+# Creates apps/<name>/ from apps/_template, registers it in apps/kustomization.yaml and
+# writes its encrypted GHCR pull secret. The image is ghcr.io/<owner/repo> (lowercased),
+# which is what docs/app-repo-release.yml pushes.
 set -euo pipefail
 
-name="${1:?project name (lowercase, dashes ok)}"
+name="${1:?project name (lowercase letters, digits, dashes)}"
 host="${2:?hostname, e.g. example.com}"
-image="${3:?image without tag, e.g. ghcr.io/owner/repo}"
+repo="${3:?GitHub repo, e.g. leeransetton/myapp}"
 port="${4:-8080}"
+
+[[ "$name" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || { echo "invalid name: $name" >&2; exit 1; }
+image="ghcr.io/${repo,,}"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$root/apps/$name"
@@ -33,4 +40,6 @@ if grep -q '^resources: \[\]' "$kust"; then
 fi
 echo "  - $name" >> "$kust"
 
-echo "Created apps/$name. Review apps/$name/values.yaml, then commit and push."
+"$root/scripts/ghcr-pull.sh" project "$name"
+
+echo "Created apps/$name (image $image). Review apps/$name/values.yaml, then commit and push."

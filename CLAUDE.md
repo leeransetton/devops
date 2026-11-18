@@ -9,7 +9,9 @@ This repo is the single source of truth for everything in DigitalOcean. The owne
 - **Traefik** is the only ingress and owns the only load balancer. **cert-manager** issues Let's Encrypt certs (ClusterIssuer `letsencrypt`) over HTTP-01, so a cert is only issued once the hostname's DNS points at the load balancer. There is **no external-dns**: its DigitalOcean provider was removed upstream, so DNS records are managed in OpenTofu instead.
 - **Before this cluster**, the sites ran on the droplet `main` (167.71.61.75, fra1). DNS for `leeransetton.com`, `sqloutputtojson.com` and `setton.gamadanak.com` still points there until each project is moved. Don't change or delete those records or the droplet without the owner's approval.
 - **Every project** is `apps/<name>/`, deployed by the shared chart `charts/web-app/`. Projects are independent and isolated by NetworkPolicy; never make one depend on another.
-- **Image updates are automatic.** App repos push `ghcr.io/<owner>/<repo>:main-<sha7>-<unixts>`; Flux's ImagePolicy picks the newest and commits the tag into `apps/<name>/values.yaml`. Expect commits from `fluxcdbot` on `main`; always `git pull --rebase` before you start and before you push.
+- **Images live in GitHub Container Registry (GHCR)**, private, one package per app repo: `ghcr.io/<owner>/<repo>` (lowercase). Each app repo's CI (`.github/workflows/release.yml`, copied from `docs/app-repo-release.yml`) builds on PRs, and on `main` pushes `main-<sha7>-<unixts>` and then deletes all but the **10 newest** versions (retention). GHCR storage is currently free, but GitHub may start billing with a month's notice, so retention stays on.
+- **Image updates are automatic.** Flux's ImageRepository/ImagePolicy (`apps/<name>/image.yaml`) sees the newest tag and commits it into `apps/<name>/values.yaml`. Expect commits from `fluxcdbot` on `main`; always `git pull --rebase` before you start and before you push.
+- **Pulling private images:** one GitHub classic PAT (`read:packages` only) is stored as the SOPS secret `ghcr-pull`, once in `flux-system` (`infrastructure/configs/ghcr-pull.sops.yaml`, for listing tags) and once per project namespace (`apps/<name>/ghcr-pull.sops.yaml`, for kubelet pulls). `scripts/ghcr-pull.sh` manages both.
 
 ## Rules
 
@@ -26,14 +28,24 @@ This repo is the single source of truth for everything in DigitalOcean. The owne
 
 ### Add a project
 
-Ask the owner for anything you don't know: **name** (lowercase, dashes ok; it becomes the namespace), **hostnames**, **app repo** (`owner/repo`), **container port**, **health path**, whether the image is **public or private**, env vars, and whether it needs a volume.
+Ask the owner for anything you don't know: **name** (lowercase, dashes ok; it becomes the namespace), **hostnames**, **app repo** (`owner/repo`), **container port**, **health path**, env vars/secrets, and **whether it needs persistent storage** (what path, how much, does the app run as non-root).
 
-1. `./scripts/new-project.sh <name> <host> ghcr.io/<owner>/<repo> <port>` (image names must be lowercase). This copies `apps/_template`, replaces the placeholders, and registers the project in `apps/kustomization.yaml`.
-2. Edit `apps/<name>/values.yaml`: extra `hosts` (e.g. `www.` variant), `healthPath`, `env`, `resources`, `hpa`, `volumes`.
-3. Every host must be inside a zone listed in `terraform/variables.tf` → `domains`. A new domain needs adding there (a `tofu apply`, rule 3), and the owner must point its nameservers at `ns1/ns2/ns3.digitalocean.com`. Then do "Point a hostname at the cluster" below, but only once the app is running in the cluster (check with `kubectl -n <name> get pods`), so live traffic isn't cut over to a broken app.
-4. Private image: see "Secrets" in `README.md` (`ghcr-pull` in the project namespace and in `flux-system`).
-5. App repo: make sure it has `.github/workflows/release.yml` copied from `docs/app-repo-release.yml`. If you have access to the app repo, add it there; otherwise tell the owner it's needed. Until the first image is pushed, `image.tag` stays `replace-me` and the pod shows `ImagePullBackOff`. That's expected.
-6. Commit, push, verify (below).
+**A. CI pipeline in the app repo** (do this first, so an image exists before deploying):
+
+1. Clone the app repo next to this one (`gh repo clone <owner>/<repo> ../<repo>`), branch from its default branch.
+2. **Dockerfile:** the repo needs one at its root that builds a production image listening on the agreed port. If it's missing, write one that fits the stack (multi-stage, small runtime base, run as a non-root user where practical) and build it locally if Docker is available. Show it to the owner.
+3. Copy `docs/app-repo-release.yml` to `.github/workflows/release.yml`. Adjust only `context`/`file` if the Dockerfile isn't at the root, and `KEEP_VERSIONS` if the owner wants a different rollback window.
+4. If the app repo's default branch isn't `main`, change `branches: [main]` in the workflow. Tags stay `main-...`, because the ImagePolicy matches that prefix.
+5. Commit and push (owner approves pushes to app repos too). Watch the run: `gh run watch -R <owner>/<repo>`. The first push to `main` creates the GHCR package `ghcr.io/<owner>/<repo>`, private and linked to the repo, which lets the cleanup job delete old versions with the built-in token.
+6. Confirm the image exists: `gh api /user/packages/container/<repo>/versions --jq '.[0].metadata.container.tags'`.
+
+**B. Deploy it from this repo:**
+
+1. `./scripts/new-project.sh <name> <host> <owner>/<repo> <port>`. This copies `apps/_template`, sets the image to `ghcr.io/<owner>/<repo>` (lowercased), registers the project in `apps/kustomization.yaml`, and writes the encrypted pull secret `apps/<name>/ghcr-pull.sops.yaml`. Kubernetes pulls with it via `imagePullSecrets: [ghcr-pull]`, and Flux reads tags via `secretRef: ghcr-pull` in `image.yaml`.
+2. Edit `apps/<name>/values.yaml`: extra `hosts` (e.g. `www.` variant), `healthPath`, `env`, `resources`, `hpa`, and `volumes`/`podSecurityContext` (see "Add or resize a volume").
+3. Every host must be inside a zone listed in `terraform/variables.tf` → `domains`. A new domain needs adding there (a `tofu apply`, rule 3), and the owner must point its nameservers at `ns1/ns2/ns3.digitalocean.com`.
+4. Commit and push, then verify (below). Within ~5 minutes Flux replaces `image.tag: replace-me` with the newest tag (a `fluxcdbot` commit), and the pod starts. `flux get images all -A` shows what Flux sees.
+5. Once the pod is Running and healthy, do "Point a hostname at the cluster" below. Never earlier, so live traffic isn't cut over to a broken app.
 
 ### Point a hostname at the cluster (DNS)
 
@@ -56,9 +68,27 @@ Removing a name from `cluster_hosts` deletes that record.
 
 Edit `apps/<name>/values.yaml` only. The chart's options are documented in `charts/web-app/values.yaml`. The ConfigMap is watched, so Flux rolls it out right after the `apps` Kustomization applies.
 
-### Add or resize a volume
+### Add or resize a volume (persistent storage)
 
-Add an entry under `volumes:` (`name`, `size`, `mountPath`) in `values.yaml`. Volumes are DigitalOcean block storage, ReadWriteOnce: the chart then forces one replica, disables HPA, and uses the Recreate strategy, so the project has a few seconds of downtime on each deploy. To resize, increase `size` (shrinking isn't possible). PVCs are kept if a project is removed; deleting the data needs the owner's explicit approval.
+Add an entry under `volumes:` in `values.yaml`:
+
+```yaml
+volumes:
+  - name: data        # PVC becomes <project>-data
+    size: 1Gi         # minimum 1Gi; $0.10/GB-month
+    mountPath: /data  # where the app writes
+podSecurityContext:
+  fsGroup: 1000       # only if the container runs as non-root: its group id, so it can write
+```
+
+How it behaves:
+- **DigitalOcean block storage, ReadWriteOnce.** A volume attaches to one node at a time, so the chart forces **1 replica**, **disables HPA**, and uses the **Recreate** strategy: a few seconds of downtime per deploy. If a project needs to scale out, keep its state in a database instead of on a volume.
+- **Storage class `do-block-storage-retain`** (chart default): deleting the PVC or the project keeps the DO volume and its data. The PVC also has `helm.sh/resource-policy: keep`. Use `storageClass: do-block-storage-xfs-retain` only if the app needs XFS.
+- **Resize:** increase `size` and push; it expands online. Shrinking is impossible.
+- **Limits:** quota per project is 3 PVCs / 20Gi (`namespace.yaml`), and each node can attach 15 volumes.
+- **Write the app for it:** everything that must survive a restart goes under `mountPath`; the rest of the container filesystem is lost on every deploy.
+- **Backups:** volumes are not backed up automatically. Before risky changes, take a snapshot with `doctl compute volume snapshot <volume-id> --snapshot-name <project>-<date>` (`kubectl get pv` shows the volume id as `volumeHandle`). If the owner wants scheduled backups, propose a design first; don't add a component without asking.
+- **Deleting data** (removing a PVC, deleting a retained DO volume, deleting snapshots) always needs the owner's explicit approval.
 
 ### Add or change an app secret
 
@@ -74,9 +104,22 @@ Make sure `secrets.sops.yaml` is listed in `apps/<name>/kustomization.yaml` and 
 
 Set `image.tag` in `values.yaml` to the wanted tag and **remove** the `# {"$imagepolicy": ...:tag}` comment on that line, otherwise Flux moves it forward again. To unpin, restore the comment exactly as in `apps/_template/values.yaml`.
 
+Only the 10 newest images exist (CI retention), so you can roll back at most 9 deploys. While a project is pinned, warn the owner that 10 more pushes to the app repo would delete the pinned image. Raise `KEEP_VERSIONS` in that app's workflow if the pin must last.
+
+### Rotate the GHCR pull token
+
+The owner creates a new classic PAT (scope `read:packages` only) at https://github.com/settings/tokens and saves it in `ghcr-token.txt` at the repo root (git-ignored). Then:
+
+```sh
+./scripts/ghcr-pull.sh init ghcr-token.txt   # re-encrypts the flux-system copy and every apps/*/ copy
+rm ghcr-token.txt
+```
+
+Commit and push, then check `flux get images repository -A` is Ready. If the old token is still valid, ask the owner to revoke it.
+
 ### Remove a project
 
-Delete `apps/<name>/` and its line in `apps/kustomization.yaml`; Flux prunes everything. Remove its names from `local.cluster_hosts` in `terraform/dns.tf` (a `tofu apply`, rule 3). Any PVC is kept (`helm.sh/resource-policy: keep`); mention it to the owner.
+Delete `apps/<name>/` and its line in `apps/kustomization.yaml`; Flux prunes everything. Remove its names from `local.cluster_hosts` in `terraform/dns.tf` (a `tofu apply`, rule 3). Volumes are kept (retain class, and the PVC has `helm.sh/resource-policy: keep`); tell the owner they still cost money and ask before deleting them. The app repo's GHCR package and CI are untouched; ask the owner whether to delete them.
 
 ### Change cluster capacity
 
@@ -122,4 +165,4 @@ CI (`.github/workflows/validate.yml`) runs the same checks on every push.
 
 ## Access
 
-Credentials live only on the owner's machine: `terraform/terraform.tfvars`, `terraform/backend.hcl`, the kubeconfig from `doctl kubernetes cluster kubeconfig save side-projects`, and the age key (`SOPS_AGE_KEY_FILE`). If one is missing, stop and ask the owner. Don't try to work around it.
+Credentials live only on the owner's machine: `terraform/terraform.tfvars`, `terraform/backend.hcl`, the age key (`%APPDATA%/sops/age/keys.txt`, found by sops automatically), `doctl` (logged in via `doctl auth init`), the kubeconfig (`~/.kube/config`, context `do-fra1-side-projects`), and `gh` (logged in as `leeransetton`, can push to the owner's repos). Tools are installed with winget; a shell started before an install may need the full path (`C:/Program Files/GitHub CLI/gh.exe`, `%LOCALAPPDATA%/Microsoft/WinGet/Packages/...`). If a credential or tool is missing, tell the owner and offer to install or set it up; don't work around it.

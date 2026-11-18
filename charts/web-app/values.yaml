@@ -37,7 +37,13 @@ hpa:
   max: 3
   cpu: 80
 
+# Persistent volumes (DigitalOcean block storage, ReadWriteOnce).
+# Any volume forces 1 replica, disables HPA and uses the Recreate strategy.
 # - name: data
 #   size: 1Gi
 #   mountPath: /data
+#   storageClass: do-block-storage-retain  # default; "-xfs-retain" for XFS
 volumes: []
+
+# Pod-level securityContext, e.g. {fsGroup: 1000} so a non-root app can write to its volumes.
+podSecurityContext: {}

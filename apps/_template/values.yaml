@@ -3,6 +3,9 @@ image:
   repository: __IMAGE__ # {"$imagepolicy": "flux-system:__PROJECT__:name"}
   tag: replace-me # {"$imagepolicy": "flux-system:__PROJECT__:tag"}
 
+imagePullSecrets:
+  - ghcr-pull
+
 port: __PORT__
 healthPath: /
 
@@ -25,9 +28,15 @@ hpa:
   max: 3
   cpu: 80 # target average CPU %, relative to requests.cpu
 
-# Block storage volumes (DigitalOcean, ReadWriteOnce = one node at a time).
-# Adding a volume switches the deployment to one replica with Recreate updates.
+# Persistent storage (DigitalOcean block storage, $0.10/GB-month, 1Gi minimum).
+# A volume attaches to one node at a time, so adding one switches this project to a
+# single replica (HPA off) with Recreate deploys: a few seconds of downtime per deploy.
+# Volumes use the "retain" storage class: the disk survives even if the project is deleted.
 volumes: []
 #  - name: data
 #    size: 1Gi
 #    mountPath: /data
+
+# If the app runs as a non-root user, set fsGroup to its group id so it can write to volumes.
+podSecurityContext: {}
+#  fsGroup: 1000

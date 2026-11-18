@@ -20,6 +20,13 @@ spec:
       labels:
         {{- include "web-app.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+        {{- if and .fsGroup (not .fsGroupChangePolicy) }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}

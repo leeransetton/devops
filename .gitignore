@@ -15,3 +15,6 @@ kubeconfig*
 # Saved plans contain secrets
 tfplan
 *.tfplan
+
+# GHCR token handed to scripts/ghcr-pull.sh init (delete after use)
+ghcr-token.txt

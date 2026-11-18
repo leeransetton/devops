@@ -1,0 +1,23 @@
+apiVersion: v1
+data:
+    .dockerconfigjson: ENC[AES256_GCM,data:yXQIqBTNeSgDvXaIMbpYBbZyGn7CtxPv8o03Uas9TQGw0Y/HciJE6vTGxBYXPmQ9VqNmDzw3D2sZwmf0e/c9PlihW6+Rh34VQOYcasTWDKym89OK5SDzsq6LowKlJs5+Ux2ltt7PoRgE/uNepLiKElidd6mGfDAZjytgtc/0hnojAXPhYVvD1lUFlD81SvTFS+RP+vYmbM3REvZfHL6oPenYHhgFeatGA/fLisenECvHPgQDWQ8cnNdSqyh9s2q0x13upVUkcTcs6hbL5+VpC1oxL8X+jxJBPACDiDrP+blbgf0d2P3iXplupLoA0S5NH7wNULlula0=,iv:/2uQ3AHSNC9djpavL1ZDIBEnFHBQq8tlnqr6y2aY6QI=,tag:UsqMQMfW6qA/ku9ZTUsnCg==,type:str]
+kind: Secret
+metadata:
+    name: ghcr-pull
+    namespace: flux-system
+type: kubernetes.io/dockerconfigjson
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAxZVk2R0pkK1I4ZGNaQmZ0
+            TDJDRkEvQ3hRaEtyT2hwenFOOHhjWk5Qb0RrCk9CbXk1YjV5Z1J1VVliV3I2WVlv
+            dUZwRjdUcXNVeTNsWWNML1dTa2NwamMKLS0tIHp6VXdjekh2RjB2THJqZXZmSGdt
+            OHRHMHU1ZEczdUxNOG1WNnV1Znd1dDAKcyWi4iao5f4S8xFApxRfi9AJYYj/FeSr
+            pOXWJw/7zM89+1i72IsCD8+OzYVuN3RxBI5WL74KIKtcwHofpFHrTw==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1k9urqvykftmpya77yfgq574cca042zsjv0welcmdagy2f63advnsk06kxk
+    encrypted_regex: ^(data|stringData)$
+    lastmodified: "2026-11-18T07:32:52Z"
+    mac: ENC[AES256_GCM,data:sNMeFvRycCGmzmCNRcIKWTDBMe4DJWb4xo1lIOcbhImJ3uzXeGS+YU/Q6pdP72wAgBzxKXc4y3rrw/qCYgRt0g5ePMA8uETANVrsJWl7ViqUZBbePR7rpkm5Ain1UgE/MKsaLGRwDt0O2JA3SvNoiQPZS7E62HQH8cHKmYbhCi8=,iv:VBWqBDl0cc7G/IJIteqIxerXq9HbZdWS2EznQJVNJfc=,tag:5QB+HdZ1g5wWvrpcNrK2qg==,type:str]
+    version: 3.13.3

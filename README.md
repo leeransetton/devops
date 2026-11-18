@@ -14,7 +14,7 @@ Push to `main` → Flux applies it within a minute or two.
 
 | Task | How |
 |---|---|
-| Add a project | `./scripts/new-project.sh <name> <host> ghcr.io/<owner>/<repo> <port>`, review `apps/<name>/values.yaml`, push. |
+| Add a project | Add the CI pipeline to the app repo, then `./scripts/new-project.sh <name> <host> <owner>/<repo> <port>`. Full steps: `CLAUDE.md` → "Add a project". |
 | Change HPA | Edit `hpa.min` / `hpa.max` / `hpa.cpu` in `apps/<name>/values.yaml`, push. |
 | Add a volume | Add an entry under `volumes:` in `values.yaml`. To grow it, raise `size`. Volumes force a single replica. |
 | Deploy a new version | Push to the app repo. Its workflow (`docs/app-repo-release.yml`) pushes an image; Flux commits the new tag here and rolls it out. |
@@ -69,8 +69,8 @@ sops -e -i apps/<name>/secrets.sops.yaml
 
 Then uncomment `secrets.sops.yaml` in `apps/<name>/kustomization.yaml` and set `envFromSecret: <name>-env` in `values.yaml`.
 
-Private GHCR image: create a GitHub PAT with `read:packages`, then make two docker-registry secrets with `sops`: `ghcr-pull` in the project namespace (add it to `imagePullSecrets` in `values.yaml`) and `ghcr-pull` in `flux-system` (uncomment `secretRef` in `apps/<name>/image.yaml`). Public images need neither.
+Image pull credentials (private GHCR): one classic PAT with `read:packages`, managed by `scripts/ghcr-pull.sh`. See `CLAUDE.md` → "Rotate the GHCR pull token".
 
 ## App repos
 
-Copy `docs/app-repo-release.yml` into each app repo as `.github/workflows/release.yml`. It tags images `main-<sha>-<timestamp>`, which is what the ImagePolicy in `apps/<name>/image.yaml` looks for.
+Copy `docs/app-repo-release.yml` into each app repo as `.github/workflows/release.yml`. It builds on PRs, pushes `ghcr.io/<owner>/<repo>:main-<sha>-<timestamp>` on `main`, and keeps only the 10 newest images.

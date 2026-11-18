@@ -1,29 +1,50 @@
-# Copy into each app repo as .github/workflows/release.yml
-# Builds on every push to main and pushes ghcr.io/<owner>/<repo>:main-<sha>-<timestamp>.
-# Flux picks up the newest tag within ~5 minutes and deploys it.
+# CI pipeline for an app repo. Copy to <app repo>/.github/workflows/release.yml
+#
+# - Pull requests: build the image only (catches broken Dockerfiles before merge).
+# - Push to main: build and push ghcr.io/<owner>/<repo>:main-<sha7>-<unix timestamp>.
+#   Flux sees the new tag within ~5 minutes, commits it to the devops repo and deploys it.
+# - Retention: after each push, keep only the newest KEEP_VERSIONS images; older ones are deleted.
+#
+# Requirements: a Dockerfile at the repo root (or change `context`/`file` below) and an app
+# that listens on the port set in the devops repo's apps/<name>/values.yaml.
 name: release
 
 on:
   push:
     branches: [main]
+  pull_request:
+  workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KEEP_VERSIONS: 10 # rollback window: the last 10 deploys stay pullable
 
 jobs:
   image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      package: ${{ steps.meta.outputs.package }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Compute image name and tag
         id: meta
         run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "image=ghcr.io/${repo}" >> "$GITHUB_OUTPUT"
+          echo "package=${repo#*/}" >> "$GITHUB_OUTPUT"
           echo "tag=main-${GITHUB_SHA::7}-$(date +%s)" >> "$GITHUB_OUTPUT"
 
+      - uses: docker/setup-buildx-action@v3
+
       - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -32,6 +53,24 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
           platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+          # One manifest per image (no attestation manifests), so retention counts real images only.
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  cleanup:
+    needs: image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ needs.image.outputs.package }}
+          package-type: container
+          min-versions-to-keep: ${{ env.KEEP_VERSIONS }}

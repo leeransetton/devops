@@ -9,9 +9,8 @@ metadata:
 spec:
   image: __IMAGE__
   interval: 5m
-  # Private image? Uncomment and create the secret in flux-system (see README).
-  # secretRef:
-  #   name: ghcr-pull
+  secretRef:
+    name: ghcr-pull # infrastructure/configs/ghcr-pull.sops.yaml
 ---
 apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy

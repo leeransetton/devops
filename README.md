@@ -4,7 +4,7 @@ Everything that runs in DigitalOcean for my side projects: one Kubernetes cluste
 
 - **`terraform/`**: OpenTofu for resources outside the cluster: VPC, cluster, node pool, DNS zones, DO project, and the Flux install.
 - **`clusters/prod/`**: Flux entrypoint. Applies `infrastructure/controllers` → `infrastructure/configs` → `apps`.
-- **`infrastructure/`**: Traefik (single load balancer), cert-manager (Let's Encrypt), external-dns (DO DNS records), metrics-server (HPA).
+- **`infrastructure/`**: Traefik (single load balancer), cert-manager (Let's Encrypt), metrics-server (HPA). DNS records live in `terraform/dns.tf`.
 - **`charts/web-app/`**: one Helm chart used by every project.
 - **`apps/<project>/`**: one folder per project. `values.yaml` holds everything you normally change.
 
@@ -37,7 +37,6 @@ Tools: `tofu`, `doctl`, `kubectl`, `flux`, `sops`, `age`.
 2. **State bucket.** In the DO console create a Spaces bucket in `fra1` (e.g. `<you>-tfstate`) and a Spaces access key. Copy `terraform/backend.hcl.example` to `terraform/backend.hcl` and fill it in.
 3. **Tokens.**
    - DO API token with full access → `do_token`.
-   - DO custom-scoped token with **domain** read/write only → `external_dns_token`.
    - GitHub fine-grained PAT for the `devops` repo with **Administration** and **Contents** read/write → `github_token`.
 4. **SOPS key.** `age-keygen -o %APPDATA%\sops\age\keys.txt` (sops finds it there automatically). Put the public key (`age1...`) in `.sops.yaml`, set `sops_age_key_file` to the file's path, and back the file up in a password manager.
    **Flux deploy key.** `ssh-keygen -t ed25519 -N "" -f %USERPROFILE%\.ssh\flux-devops`, and set `flux_ssh_key_file` to that path.

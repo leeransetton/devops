@@ -4,5 +4,4 @@ resources:
   - sources.yaml
   - traefik.yaml
   - cert-manager.yaml
-  - external-dns.yaml
   - metrics-server.yaml

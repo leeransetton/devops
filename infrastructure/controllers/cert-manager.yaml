@@ -13,8 +13,7 @@ spec:
   chart:
     spec:
       chart: cert-manager
-      # TODO: pin to the installed version after the first successful install.
-      version: ">=1.16.0 <2.0.0"
+      version: "v1.21.3"
       sourceRef:
         kind: HelmRepository
         name: jetstack

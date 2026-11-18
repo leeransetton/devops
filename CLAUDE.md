@@ -4,9 +4,10 @@ This repo is the single source of truth for everything in DigitalOcean. The owne
 
 ## How the system works
 
-- **OpenTofu (`terraform/`)** owns resources outside the cluster: VPC, the DOKS cluster `side-projects` in `fra1`, its single autoscaling node pool, the DNS zones, the DO project, the Flux install, and two in-cluster secrets (`flux-system/sops-age`, `external-dns/external-dns-digitalocean`). State is in a Spaces bucket.
+- **OpenTofu (`terraform/`)** owns resources outside the cluster: VPC, the DOKS cluster `side-projects` in `fra1`, its single autoscaling node pool, the DNS zones, the DO project, the Flux install, the in-cluster secret `flux-system/sops-age`, and the **DNS records that point hostnames at the cluster** (`terraform/dns.tf`). State is in the versioned Spaces bucket `leeransetton-tfstate` (fra1).
 - **Flux** watches `main` of `github.com/leeransetton/devops`, path `clusters/prod`. It applies `infrastructure/controllers` → `infrastructure/configs` → `apps`, in that order. Anything changed by hand in the cluster is reverted.
-- **Traefik** is the only ingress and owns the only load balancer. **cert-manager** issues Let's Encrypt certs (ClusterIssuer `letsencrypt`). **external-dns** creates DNS records from Ingress hosts in the zones listed in `infrastructure/controllers/external-dns.yaml`.
+- **Traefik** is the only ingress and owns the only load balancer. **cert-manager** issues Let's Encrypt certs (ClusterIssuer `letsencrypt`) over HTTP-01, so a cert is only issued once the hostname's DNS points at the load balancer. There is **no external-dns**: its DigitalOcean provider was removed upstream, so DNS records are managed in OpenTofu instead.
+- **Before this cluster**, the sites ran on the droplet `main` (167.71.61.75, fra1). DNS for `leeransetton.com`, `sqloutputtojson.com` and `setton.gamadanak.com` still points there until each project is moved. Don't change or delete those records or the droplet without the owner's approval.
 - **Every project** is `apps/<name>/`, deployed by the shared chart `charts/web-app/`. Projects are independent and isolated by NetworkPolicy; never make one depend on another.
 - **Image updates are automatic.** App repos push `ghcr.io/<owner>/<repo>:main-<sha7>-<unixts>`; Flux's ImagePolicy picks the newest and commits the tag into `apps/<name>/values.yaml`. Expect commits from `fluxcdbot` on `main`; always `git pull --rebase` before you start and before you push.
 
@@ -29,10 +30,27 @@ Ask the owner for anything you don't know: **name** (lowercase, dashes ok; it be
 
 1. `./scripts/new-project.sh <name> <host> ghcr.io/<owner>/<repo> <port>` (image names must be lowercase). This copies `apps/_template`, replaces the placeholders, and registers the project in `apps/kustomization.yaml`.
 2. Edit `apps/<name>/values.yaml`: extra `hosts` (e.g. `www.` variant), `healthPath`, `env`, `resources`, `hpa`, `volumes`.
-3. Every host must be inside a zone in `variables.tf` → `domains` **and** in `domainFilters` in `infrastructure/controllers/external-dns.yaml`. If it's a new domain, add it to both. This needs a `tofu apply` (rule 3), and the owner must point the domain's nameservers at `ns1/ns2/ns3.digitalocean.com`.
+3. Every host must be inside a zone listed in `terraform/variables.tf` → `domains`. A new domain needs adding there (a `tofu apply`, rule 3), and the owner must point its nameservers at `ns1/ns2/ns3.digitalocean.com`. Then do "Point a hostname at the cluster" below, but only once the app is running in the cluster (check with `kubectl -n <name> get pods`), so live traffic isn't cut over to a broken app.
 4. Private image: see "Secrets" in `README.md` (`ghcr-pull` in the project namespace and in `flux-system`).
 5. App repo: make sure it has `.github/workflows/release.yml` copied from `docs/app-repo-release.yml`. If you have access to the app repo, add it there; otherwise tell the owner it's needed. Until the first image is pushed, `image.tag` stays `replace-me` and the pod shows `ImagePullBackOff`. That's expected.
 6. Commit, push, verify (below).
+
+### Point a hostname at the cluster (DNS)
+
+DNS records are in `terraform/dns.tf` → `local.cluster_hosts` (zone → list of names, `@` = bare domain). Each name becomes an A record to the load balancer `side-projects`.
+
+1. Check the zone's current records: `doctl compute domain records list <zone>`.
+2. If the name already has an A record (e.g. pointing at the old droplet), add an `import` block to `terraform/imports.tf` so OpenTofu takes over that record and changes it in place. That avoids a duplicate A record and any gap in service:
+   ```hcl
+   import {
+     to = digitalocean_record.cluster["www.leeransetton.com"]   # key: "<name>.<zone>", or "<zone>" for "@"
+     id = "leeransetton.com,<record id from doctl>"
+   }
+   ```
+3. Add the name to `local.cluster_hosts`, then run `tofu plan` (from `terraform/`, see "Windows quirks"). The plan must show only the expected record imports/changes. Show it to the owner and apply after approval.
+4. Verify: `nslookup <host> 8.8.8.8` returns the load balancer IP, then `kubectl -n <name> get certificate` turns Ready, then `curl -sI https://<host>`.
+
+Removing a name from `cluster_hosts` deletes that record.
 
 ### Change HPA, resources, env, hostnames
 
@@ -58,13 +76,13 @@ Set `image.tag` in `values.yaml` to the wanted tag and **remove** the `# {"$imag
 
 ### Remove a project
 
-Delete `apps/<name>/` and its line in `apps/kustomization.yaml`. Flux prunes everything, and external-dns removes the DNS records. Any PVC is kept (`helm.sh/resource-policy: keep`); mention it to the owner.
+Delete `apps/<name>/` and its line in `apps/kustomization.yaml`; Flux prunes everything. Remove its names from `local.cluster_hosts` in `terraform/dns.tf` (a `tofu apply`, rule 3). Any PVC is kept (`helm.sh/resource-policy: keep`); mention it to the owner.
 
 ### Change cluster capacity
 
 Edit `terraform/terraform.tfvars` (`node_size`, `min_nodes`, `max_nodes`) or `variables.tf` defaults, then `tofu plan` → owner approval → `tofu apply`. Changing `node_size` replaces the node pool.
 
-### Change a platform component (Traefik, cert-manager, external-dns, metrics-server)
+### Change a platform component (Traefik, cert-manager, metrics-server)
 
 Edit its HelmRelease in `infrastructure/controllers/`. Pin `version:` to exact versions; when bumping, read the chart's release notes for breaking changes first.
 

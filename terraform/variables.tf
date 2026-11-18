@@ -49,7 +49,7 @@ variable "max_nodes" {
 }
 
 variable "domains" {
-  description = "DNS zones managed in DigitalOcean. Records inside them are created by external-dns."
+  description = "DNS zones managed in DigitalOcean. Records pointing at the cluster are set in dns.tf (local.cluster_hosts)."
   type        = list(string)
   default = [
     "leeransetton.com",
@@ -68,8 +68,3 @@ variable "sops_age_key_file" {
   type        = string
 }
 
-variable "external_dns_token" {
-  description = "DigitalOcean token for external-dns. Use a custom-scoped token with domain read/write only."
-  type        = string
-  sensitive   = true
-}

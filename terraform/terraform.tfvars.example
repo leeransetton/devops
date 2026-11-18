@@ -1,6 +1,5 @@
 # Copy to terraform.tfvars (git-ignored) and fill in.
 do_token           = "dop_v1_..."
-external_dns_token = "dop_v1_..." # custom scope: domain read/write only
 github_token       = "github_pat_..."
 github_owner       = "leeransetton"
 github_repo        = "devops"

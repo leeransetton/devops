@@ -36,26 +36,23 @@ resource "flux_bootstrap_git" "this" {
   components_extra   = ["image-reflector-controller", "image-automation-controller"]
 }
 
-# Two secrets the cluster needs that must never be in git:
-#   flux-system/sops-age                      - key Flux uses to decrypt *.sops.yaml
-#   external-dns/external-dns-digitalocean    - DO token for DNS records
+# Secret the cluster needs that must never be in git:
+#   flux-system/sops-age - key Flux uses to decrypt *.sops.yaml
 # Created with kubectl instead of the kubernetes provider, because Windows Smart App
 # Control blocks that provider's binary on the owner's machine. Re-runs when any input changes.
 resource "terraform_data" "cluster_secrets" {
   depends_on = [flux_bootstrap_git.this]
 
   triggers_replace = {
-    cluster   = digitalocean_kubernetes_cluster.main.id
-    age_key   = sha256(file(var.sops_age_key_file))
-    dns_token = sha256(var.external_dns_token)
+    cluster = digitalocean_kubernetes_cluster.main.id
+    age_key = sha256(file(var.sops_age_key_file))
   }
 
   provisioner "local-exec" {
     interpreter = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
     environment = {
-      KUBECONFIG_RAW     = digitalocean_kubernetes_cluster.main.kube_config[0].raw_config
-      AGE_KEY_FILE       = var.sops_age_key_file
-      EXTERNAL_DNS_TOKEN = var.external_dns_token
+      KUBECONFIG_RAW = digitalocean_kubernetes_cluster.main.kube_config[0].raw_config
+      AGE_KEY_FILE   = var.sops_age_key_file
     }
     command = <<-EOT
       $ErrorActionPreference = 'Stop'
@@ -66,9 +63,7 @@ resource "terraform_data" "cluster_secrets" {
           $yaml | kubectl --kubeconfig $kc apply -f -
           if ($LASTEXITCODE -ne 0) { throw 'kubectl apply failed' }
         }
-        Apply-Yaml (kubectl create namespace external-dns --dry-run=client -o yaml)
         Apply-Yaml (kubectl -n flux-system create secret generic sops-age "--from-file=age.agekey=$env:AGE_KEY_FILE" --dry-run=client -o yaml)
-        Apply-Yaml (kubectl -n external-dns create secret generic external-dns-digitalocean "--from-literal=token=$env:EXTERNAL_DNS_TOKEN" --dry-run=client -o yaml)
       } finally {
         Remove-Item $kc -Force -ErrorAction SilentlyContinue
       }

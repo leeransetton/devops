@@ -34,7 +34,8 @@ jobs:
           set -euo pipefail
           for dir in infrastructure/controllers infrastructure/configs apps; do
             echo "::group::$dir"
-            kubectl kustomize "$dir" | kubeconform -strict -ignore-missing-schemas -summary \
+            # Secrets are skipped: they're all SOPS-encrypted, and the extra `sops:` block fails -strict.
+            kubectl kustomize "$dir" | kubeconform -strict -ignore-missing-schemas -skip Secret -summary \
               -schema-location default \
               -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
             echo "::endgroup::"
